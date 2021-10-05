@@ -1,13 +1,18 @@
 """
-This class is an implementation of the ID3 algorithm to build a decision tree
-from a given set of labeled data
+I made this file to help me better understand and implement
+the ID3 algorithm based upon my own structure and methods that 
+help me learn best. While still using the same algortihm and 
+mathematics behind the model.
 
 kward
 """
 
-import re
-import math
-import numpy as np
+import re               #   Regular expression operations
+import math             #   Python standard math library
+import os               #   Operating system operations
+import time             #   Timing operations
+import numpy as np      #   Vector and matrix structures and operations
+import pandas as pd     #   Yeah.... I'm not too sure what this package is
 
 # ID3 Algorithm for Decision Trees
 class ID3:
@@ -17,20 +22,18 @@ class ID3:
         
         # Check if a data filename was passed in
         if data_file:
-            # Create class objects
+            # Create class object(s)
             self.parser = Parser(data_file)
-            self.probability = ID3_Probability(self.parser.data)
 
             # Set class fields
             self.data = self.parser.data
             self.data_labels = self.parser.data_labels
             self.attrNames = self.parser.vars
-            self.attributes = [*range(0,len(self.data[0])-1)]
-            self.trained = False
+            self.attributes = [*range(0,len(self.data[0])-1)]       # Fill array with values from 0 to the length of the data vectors
 
             # Compute initial metrics
-            self.start_pdf = self.probability.pdf(self.data)
-            self.start_entropy = self.probability.entropy(self.start_pdf)
+            self.start_pdf = ID3_Probability.pdf(self.data)
+            self.start_entropy = ID3_Probability.entropy(self.start_pdf)       # NOTE: This variable will eventually represent previous_entropy
 
         else:
             raise RuntimeError("\n\nError in ID3.__init__(): \n\n'WHERE'S THE DATA?!?!?!?!?!????????'\n\n\t-ID3 <3\n\n")
@@ -51,44 +54,53 @@ class ID3:
             else:
                 right.append(row)   # Add row to right partition
 
+        # Create split
         split = [left, right]
 
-        # If a split results in an empty branch, set empty branch to none empty
+        # If a split results in an empty branch, compute split metrics only on the non-empty branch
+        # Left branch is empty
         if not left:
             left_pdf = 0.0
-            left_e = 0.0
+            left_entropy = 0.0
 
+            # Compute the class probability ditribution of the right side
             right_pdf = ID3_Probability.pdf(right)
 
             # Check for and remove zeros
             if 0.0 in right_pdf:
                 right_pdf.remove(0.0)
 
-            right_e = ID3_Probability.entropy(right_pdf)
+            # Compute the entropy of the right side
+            right_entropy = ID3_Probability.entropy(right_pdf)
 
             # Compute the entropy of the entire split
-            weighted_avg_entropy = ((len(left) / len(data)) * left_e) + ((len(right) / len(data)) * right_e)
+            weighted_avg_entropy = ((len(left) / len(data)) * left_entropy) + ((len(right) / len(data)) * right_entropy)
 
+            # Build split data
             split = {
             'left': left,
             'right': right,
-            'left_entropy': left_e,
-            'right_entropy': right_e,
+            'left_entropy': left_entropy,
+            'right_entropy': right_entropy,
             'wAvg_entropy': weighted_avg_entropy
             }
 
+            # Return split
             return split
 
+        # Right branch empty
         elif not right:
             right_pdf = 0.0
             right_e = 0.0
 
+            # Compute the class probability ditribution of the left side
             left_pdf = ID3_Probability.pdf(left)
 
             # Check for and remove zeros
             if 0.0 in left_pdf:
                 left_pdf.remove(0.0)
 
+            # Compute the entropy of the left side
             left_e = ID3_Probability.entropy(left_pdf)
 
             # Compute the entropy of the entire split
@@ -104,34 +116,35 @@ class ID3:
 
             return split
 
-        
+        # Neither branch is empty
+        else:
 
-        # Compute probability distribution of classes on left and right branch
-        left_pdf = ID3_Probability.pdf(split[0])
-        right_pdf= ID3_Probability.pdf(split[1])
+            # Compute probability distribution of classes on left and right branch
+            left_pdf = ID3_Probability.pdf(split[0])
+            right_pdf= ID3_Probability.pdf(split[1])
 
-        # Check for and remove zeros
-        if 0.0 in left_pdf:
-            left_pdf.remove(0.0)
-        if 0.0 in right_pdf:
-            right_pdf.remove(0.0)
+            # Check for and remove zeros
+            if 0.0 in left_pdf:
+                left_pdf.remove(0.0)
+            if 0.0 in right_pdf:
+                right_pdf.remove(0.0)
 
-        # Compute the entropy of the left and right branch
-        left_e = ID3_Probability.entropy(left_pdf)
-        right_e = ID3_Probability.entropy(right_pdf)
+            # Compute the entropy of the left and right branch
+            left_e = ID3_Probability.entropy(left_pdf)
+            right_e = ID3_Probability.entropy(right_pdf)
 
-        # Compute the entropy of the entire split
-        weighted_avg_entropy = ((len(split[0]) / len(data)) * left_e) + ((len(split[1]) / len(data)) * right_e)
+            # Compute the entropy of the entire split
+            weighted_avg_entropy = ((len(split[0]) / len(data)) * left_e) + ((len(split[1]) / len(data)) * right_e)
 
-        split = {
-            'left': left,
-            'right': right,
-            'left_entropy': left_e,
-            'right_entropy': right_e,
-            'wAvg_entropy': weighted_avg_entropy
-        }
+            split = {
+                'left': left,
+                'right': right,
+                'left_entropy': left_e,
+                'right_entropy': right_e,
+                'wAvg_entropy': weighted_avg_entropy
+            }
 
-        return split
+            return split
 
     # Find the best split for the given set of data
     def best_split(self, data):
@@ -140,30 +153,35 @@ class ID3:
 
         # Loop through all attributes to find attribute with best IG for best split
         for attr_val in self.attributes:
-            attr_name = self.attrNames[attr_val]
-            split = self.split(attr_val, data)
-            wae = split['wAvg_entropy']
-            info_gain = self.start_entropy - wae
-            gains.append(info_gain)
+            split = self.split(attr_val, data)                  # Split data
+            wae = split['wAvg_entropy']                         # Weighted average entropy of the split
+            info_gain = self.start_entropy - wae                # Compute info gain relative to the entropy of the parent node
+            gains.append(info_gain)                             # Add info gain to list
 
-        
+        # Create best split
         best = {
-            'attr': gains.index(max(gains)),
-            'split': self.split(gains.index(max(gains)),data)
+            'attr': gains.index(max(gains)),                    # Best split attribute is index of element with highest IG
+            'split': self.split(gains.index(max(gains)),data)   # Split on best attribute
         }
 
+        # Update baseline entropy to be the weighted average entropy of best split (parent node)
+        self.start_entropy = best['split']['wAvg_entropy']
+
+        # Return best split (new node)
         return best
 
     # Create a leaf node
     def leaf_node(self, data):
         label_counts = [0,0]
 
+        # Count number of occurrences of each class label in the data
         for row in data:
             if row[-1] == 0:
                 label_counts[0] += 1
             elif row[-1] == 1:
                 label_counts[1] += 1
 
+        # Value of the leaf is the index of the highest element (i.e the frequentist class label)
         value = label_counts.index(max(label_counts))
 
         return value
@@ -190,23 +208,24 @@ class ID3:
             return
 
 
-        ### First, build the left side of the tree recursively ###
+        # First, build the left side of the tree recursively
 
         # Check if left partition can be split again
+        # Partition too small to split
         if len(left) <= min_part_size:
             # Create a leaf node from partition
             parent_node['left'] = self.leaf_node(left)
 
         # Partition can be split again
         else:
-            # Get best split
+            # Get best split (next node)
             parent_node['left'] = self.best_split(left)
 
             # Recursively build the rest of the left side of the tree
             self.create_nodes(parent_node['left'], max_depth, min_part_size, curr_depth + 1)
 
         
-        ### Next, build the right side of the tree ###
+        # Next, build the right side of the tree
         
         # Partition can't be split again
         if len(right) <= min_part_size:
@@ -231,7 +250,6 @@ class ID3:
 
         # Build the rest of the tree from the root node
         self.create_nodes(self.root_node, max_depth, min_part_size, 1)
-        self.trained = True
 
         # Return tree
         return self.root_node
@@ -244,7 +262,7 @@ class ID3:
         # Check which side of the tree to travel down based on root node's attribute
         if data[curr_node['attr']] < 1:
 
-            # Traverse left side of the tree #
+            # Traverse left side of the tree
 
             # Check if left branch leads to a decision node or leaf node
             # Decision node
@@ -254,10 +272,11 @@ class ID3:
             
             # Leaf node
             else:
+                # Return classification
                 return curr_node['left']
         else:
 
-            # Traverse the right side of the tree #
+            # Traverse the right side of the tree
 
             # Check if right branch leads to a decision node or leaf node
             # Decision node
@@ -301,7 +320,7 @@ class Parser:
 
         # Loop through all rows in data
         for row in self.data:
-            # Add class label to parser's list before removal
+            # Add class label to list
             self.data_labels.append(row[-1])
 
     # Split dataset into data and labels
@@ -324,11 +343,6 @@ class Parser:
 
 # Probability Helper Class
 class ID3_Probability:
-
-    # Initialize object with a dataset
-    def __init__(self, dataset):
-        self.data = dataset
-
     # Find number of times an attribute is equal to a value
     def count_occurrs(self, attr, val):
         occurrs = 0
@@ -341,10 +355,9 @@ class ID3_Probability:
         return occurrs
 
     # Compute the probability distribution of a binary data vector
-    # Assuming class label is in the last element
+    # Assuming class label is the last element
     @staticmethod
     def pdf(dataset):
-        labels = [0,1]
         occurrs = [0,0]
         prob_dist = [0.0,0.0]
 
@@ -377,17 +390,40 @@ class ID3_Probability:
 # Compute the accuracy of a tree
 def accuracy(tree, data):
 
-    n_samples = len(data)
-    n_correct = 0
+    n_samples = len(data)                           # Total number of data samples
+    n_correct = 0                                   # Number of correct classifications
 
+    results = []                                    # Test results
+
+    # Loop through each row (test) in the data set
     for row in data:
 
-        if ID3.predict(row, tree) == row[-1]:
+        # Make prediction and get actual value
+        prediction = ID3.predict(row, tree)
+        actual = row[-1]
+
+        # Check if prediction is correct
+        if prediction == actual:
             n_correct += 1
+        
+        # Create results for this test row
+        test_res = {
+            'input': row,
+            'prediction': prediction,
+            'actual': actual
+        }
 
-    return n_correct / n_samples
+        # Save to overall results
+        results.append(test_res)
 
-# Build tree for each training set using ID3 and test
+    # Compute accuracy and store in results
+    acc = float(n_correct / n_samples)
+    results.append({'accuracy': acc})
+
+    # Return test results
+    return results
+
+# Build tree for each training set using ID3
 def runAllTests():
     numSets = 3
 
@@ -416,70 +452,81 @@ def runAllTests():
         tree = id3.build_tree(id3.data, min_partition_size, max_depth)
 
         # Compute tree's accuracy on training, validation, and test sets
-        train_acc = accuracy(tree, train_sets[i])
-        test_acc = accuracy(tree, test_sets[i])
+        train_res = accuracy(tree, train_sets[i])
+        test_res = accuracy(tree, test_sets[i])
 
+        # Check if test had a validation set
         if i < 2:
-            valid_acc = accuracy(tree, valid_sets[i])
+            valid_res = accuracy(tree, valid_sets[i])
         else:
-            valid_acc = 'No validation file.'
+            valid_res = 'No validation file.'
 
-        # Create struct of tree and info
+        # Create dict of tree and info
         tree_info = {
             'id': i,
             'tree': tree,
-            'train_acc': train_acc,
-            'valid_acc': valid_acc,
-            'test_acc': test_acc
+            'train_results': train_res,
+            'valid_results': valid_res,
+            'test_results': test_res
         }
         
         # Save to list of trees
         trees.append(tree_info)
 
-        print("\n" + str(tree_info) + "\n")
+    # Return decision trees
+    return trees
 
 
+# Test decision trees against all test sets and save results to seperate files
+def test_and_save():
+
+    # Create and test all decision trees
+    trees = runAllTests()
+
+    # Check if results directory exists
+    if not os.path.exists("/results"):
+        os.system("mkdir results")
+
+    # Loop through all trees
+    for i in range(len(trees)):
+        # Open output file and get current decision tree
+        tree_file = open(("results/tree_%d.txt" % i), "w")
+        tree = trees[i]
+
+        # Write information about tree to the file
+        tree_file.write("\nTREE ID: " + str(tree['id']))
+        tree_file.write("\n\nTREE STRUCTURE: \n" + str(tree['tree']))
+        tree_file.write("\n\nTEST RESULTS: \n" + str(tree['test_results']))
+
+        # Write tree test accuracy to file
+        tree_file.write("\n\nTREE TEST ACCURACY: %.3f%%" % (tree['test_results'][-1]['accuracy'] * 100.0))
+
+        # Check if trees has validation test results
+        if tree['valid_results'] != "No validation file.":
+            tree_file.write("\n\nTREE VALIDATION ACCURACY: %.3f%%" % (tree['valid_results'][-1]['accuracy'] * 100.0))
+        else:
+            tree_file.write("\n\nVALIDATION RESULTS: \n" + str(tree['valid_results']))
+
+        # Close file
+        tree_file.close()
+
+# Main function
 def main():
 
+    print("\n\nBUILDING AND TESTING DECISION TREES...\n")
 
-    runAllTests()
+    # For user-readability and dramatic effect
+    time.sleep(1.5)
 
+    # Build, test, and store results of decision trees over the 3 datasets
+    test_and_save()
 
-
-    # tree = ID3(data_file="data_sets1/training_set.csv")
-    # prob = ID3_Probability(tree.data)
-
-    # start_pdf = prob.pdf(tree.data)
-    # start_e = prob.entropy(start_pdf)
-    # print("\n\nDataset initial pdf: " + str(start_pdf))
-    # print("Dataset initial entropy: " + str(start_e) + "\n")
-
-    # # Training parameters
-    # train_data = tree.data
-    # min_partition_size = 1
-    # max_depth = 12
-
-    # # Build the tree
-    # root = tree.build_tree(train_data, min_partition_size, max_depth)
-
-    # # Read in validation and test data
-    # test_set = Parser.read_data('data_sets1/test_set.csv')[0]
-    # valid_set = Parser.read_data('data_sets1/validation_set.csv')[0]
-
-    # # Accuracy metrics
-    # train_acc = accuracy(root, train_data)
-    # valid_acc = accuracy(root, valid_set)
-    # test_acc = accuracy(root, test_set)
-
-    # print("\nTraining accuracy: %.3f" % train_acc)
-    # print("Validation accuracy: %.3f" % valid_acc)
-    # print("Test accuracy: %.3f" % test_acc)
-
-    print("\n\n")
+    print("TESTING COMPLETE!\nRESULTS HAVE BEEN SAVED UNDER '/results'\n\n")
 
 
 if __name__ == "__main__":
     try:
         main()
     except Exception:
+        print("\n\nAn unexpected error has occurred!\n\n")
         quit()
