@@ -9,7 +9,10 @@ import os
 import time
 import re
 import warnings
+import random
 import numpy as np
+from functools import cache
+import matplotlib.pyplot as plt
 
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 import mlutils
@@ -45,6 +48,27 @@ class Parser:
             ydata.append(float(li[-1]))
         
         return np.array(xdata), np.array(ydata)
+
+# Model Visualizer class
+class ModelVisualizer:
+
+    # Initialize
+    def __init__(self):
+        pass
+
+    # Plot losses over iterations
+    @staticmethod
+    def plot_loss(losses, xlabel='', ylabel='', title=''):
+        # Create a linear space to plot
+        x_axis = np.linspace(0,len(losses), len(losses))
+
+        # Plot losses and show figure
+        plt.plot(x_axis,losses, 'r')
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.title(title)
+        plt.autoscale(True,axis='y')
+        plt.show(block=False)
 
 # Logistic Regression Class
 class LogReg:
@@ -89,7 +113,6 @@ class LogReg:
         # Model parameters
         self.weights = np.random.rand(len(self.train_inputs[0]))
         self.bias = 0.0
-        self.learning_rate = 0.001
 
         # Model data
         self.errors = []                # List for keeping track of training progress
@@ -97,12 +120,18 @@ class LogReg:
         self.trained = False
 
     # Logistic (sigmoid) function
+    @cache
     def sigmoid(self, x):
         return 1 / (1 + np.exp(-x))
 
     # Derivative of logistic function
+    @cache
     def sigmoid_deriv(self, x):
         return self.sigmoid(x) * (1 - self.sigmoid(x))
+
+    # Regularize weights
+    def L2(self):
+        return np.linalg.norm(self.weights - self.bias)
 
     # Compute weighted sum of inputs
     def wsum(self, inputs):
@@ -113,20 +142,17 @@ class LogReg:
         return self.sigmoid(self.wsum(inputs))
 
     # Compute the cross entropy loss of a single prediction
-    def cross_entropy(self, predicted, actual):
-        # Check if predicted is correct
-        if predicted == 0.0 or (1 - predicted) == 0.0:
-            return 1.0
-
-        return -(actual * np.log(predicted) + (1 - actual) * np.log(1 - predicted))
+    # boost = lambda = regularization hyperparameter
+    def cross_entropy(self, predicted, actual, boost):
+        return -(actual * np.log(predicted) + (1 - actual) * np.log(1 - predicted + (boost/2)*self.L2()))
 
     """
     Compute the gradient of the cross entropy loss function
     """
-    def gradient(self, inputs, label):
+    def gradient(self, inputs, label, boost):
 
         # Derivative with respect to the model's prediction (output)
-        loss_wrt_prediction = label * (1 / self.feed_forward(inputs)) + (1 - label) * 1 / (1 - self.feed_forward(inputs))
+        loss_wrt_prediction = label * (1 / self.feed_forward(inputs)) + (1 - label) * 1 / (1 - self.feed_forward(inputs) + (boost/2)*self.L2())
 
         # Derivative of output with respect to it's weighted sum
         pred_wrt_wsum = self.sigmoid_deriv(self.wsum(inputs))
@@ -143,38 +169,55 @@ class LogReg:
         return round(self.feed_forward(inputs))
 
     # Perform a weight update
-    def update(self, inputs, label):
+    def update(self, inputs, label, learning_rate, boost):
         # Compute weight gradient
-        gradient = self.gradient(inputs, label)
+        gradient = self.gradient(inputs, label, boost)
 
         # Update weight vector by stepping in the direction of neg. gradient
-        self.weights += -self.learning_rate * gradient
+        self.weights += learning_rate * gradient - boost
 
         # Update bias
         self.bias += label
 
 
     # Compute total loss over the entire dataset
-    def total_loss(self):
+    def total_loss(self, boost, inputs='', labels=''):
         loss = 0.0
 
-        # Loop through dataset
-        for i in range(len(self.train_inputs)):
-            # Get input vector and class label
-            input = self.train_inputs[i]
-            label = self.train_labels[i]
+        # Compute total loss of existing training set
+        if len(inputs) <= 0 and len(labels) <= 0:
+            # Loop through dataset
+            for i in range(len(self.train_inputs)):
+                # Get input vector and class label
+                input = self.train_inputs[i]
+                label = self.train_labels[i]
 
-            # Compute output
-            output = self.feed_forward(input)
+                # Compute output
+                output = self.feed_forward(input)
+                
+                # Increment loss 
+                loss += self.cross_entropy(output, label, boost)
+
+        # Compute total loss of given data    
+        else:
+            # Loop through data
+            for i in range(len(inputs)):
+                # Get input vector and class label
+                input = inputs[i]
+                label = labels[i]
+
+                # Compute output
+                output = self.feed_forward(input)
+                
+                # Increment loss 
+                loss += self.cross_entropy(output, label, boost)
+
             
-            # Increment loss 
-            loss += abs(label - output)
-        
         return loss
 
 
     # Train model on data
-    def train(self, max_itrs=100, stuck_limit=5, stop=0.01):
+    def train(self, max_itrs=100, learning_rate=0.001, boost=0.00001, stop=0.01, batch=''):
         
         # Initialize training results
         train_results = {
@@ -182,56 +225,74 @@ class LogReg:
             'iterations': 0
         }
 
+        # Inputs that failed and need to be re-trained after normal training
+        failures = []
+
         # Compute initial loss over entire training set
-        init_loss = self.total_loss()
-        print("\nStarting loss: " + str(init_loss))
+        init_loss = self.total_loss(boost)
+
+        # Start and stop points for training
+        start = 0
+        end = len(self.train_inputs)
+
+        # Check if a batch has been specified
+        if len(batch) == 2:
+            start = batch[0]
+            end = batch[1]
 
         # Loop through dataset
-        for i in range(len(self.train_inputs)):
+        for i in range(start, end):
             # Get input-label data
             inputs = self.train_inputs[i]
             label = self.train_labels[i]
 
             # Compute initial output and loss
             output = self.feed_forward(inputs)
-            loss = self.cross_entropy(output, label)
+            loss = self.cross_entropy(output, label, boost)
 
             # Current training iteration for this input
             curr_itr = 0
 
+            # Loss values for the current input
+            input_losses = []
+            input_losses.append(loss)
+
             # Add total loss at iteration to training results
             #train_results['loss'].append(self.total_loss(train_inputs, train_labels))
 
-            prev_loss = loss
-            stuck_cnt = 0    # Keep track of number of times loss does not change
-
             # Train model on this input until it reaches acceptable margins for loss
             # or max iterations reached
-            while loss > stop and curr_itr <= max_itrs:
-                prev_loss = loss
+            while loss > stop and curr_itr < max_itrs:
 
                 # Update model parameters
-                self.update(inputs, label)
+                self.update(inputs, label, learning_rate, boost)
 
                 # Recompute output and loss
                 output = self.feed_forward(inputs)
-                loss = self.cross_entropy(output, label)
-
-                # Check if loss is the same (model is stuck)
-                if loss == prev_loss:
-                    stuck_cnt += 1
-                if stuck_cnt >= stuck_limit:
-                    print("MODEL STUCK IN LOCAL MINIMA! Moving to next input..\n")
-                    break
+                loss = self.cross_entropy(output, label, boost)
 
                 # Increment current training iterations
                 curr_itr += 1
 
-            if not np.isnan(loss):
-                print("Loss(input=" + str(i) + "): " + str(loss))
+                # Add current loss at current iteration to list
+                input_losses.append(loss)
 
                 # Add total loss at iteration to training results
                 #train_results['loss'].append(self.total_loss())
+
+
+            # Check if input failed training
+            if loss > stop:
+                failures.append(i)
+
+            # Plot losses, skip if curr_itr <= 1
+            print("Loss(input=" + str(i) + "): " + str(loss) + "\titrs = " + str(curr_itr))
+            plt_title = 'Training progress on input ' + str(i)
+
+            # if curr_itr > 1:
+            #     ModelVisualizer.plot_loss(input_losses, xlabel='Training iteration', ylabel='Loss (Error)', title=plt_title)
+            #     plt.pause(1)
+            #     plt.close()
 
             # Increment total training iterations
             train_results['iterations'] += curr_itr
@@ -251,76 +312,46 @@ class LogReg:
             self.test_inputs, self.test_labels = Parser.read_data(filename)
             print("\nNew test data loaded!\n")
 
-    # Test model on XOR dataset
-    def testXOR(self):
 
-        # Test results
-        n_samples = len(self.test_inputs)
-        n_correct = 0
+# Train/Test model on batch of data
+def runBatch(b_start, b_end, itrs, learn_rate, boost, logReg, train=True):
+    if train:
+        # Get batch data from logreg obj
+        input_data = logReg.train_inputs[b_start:b_end]
+        input_labels = logReg.train_labels[b_start:b_end]
 
-        # Train model
-        self.train(self.train_inputs, self.train_labels)
+        print("Training on batch [%d:%d] (size=%d)...\n" % (b_start, b_end, (b_start + b_end)))
+        print("Total loss before training: " + str(logReg.total_loss(boost, inputs=input_data, labels=input_labels)))
 
-        print("\n\nTesting trained model on train data...\n")
-        time.sleep(3)
+        # Train model on batch data
+        logReg.train(itrs, learn_rate, boost, batch=[b_start, b_end])
 
-        # Loop through training dataset
-        for i in range(len(self.train_inputs)):
-            # Get input-label data
-            inputs = self.train_inputs[i]
-            label = self.train_labels[i]
+        print("Total loss after training: " + str(logReg.total_loss(boost, inputs=input_data, labels=input_labels)))
 
-            prediction = self.predict(inputs)
+    else:
+        raise NotImplementedError
 
-            print("\nInputs: " + str(inputs))
-            print("Predicted: " + str(prediction))
-            print("Actual: " + str(label))
+def main():
+    # Data files
+    trainfile = 'datasets/spambase-train.csv'
+    testfile = 'datasets/spambase-test.csv'
 
-            time.sleep(2)
+    # Hyperparameters
+    max_train_itrs = 100000
+    learning_rate = 0.01
+    boost = 0.00001
 
-        print("\n\nTesting trained model on test data...\n")
-        time.sleep(3)
+    # Model
+    lr = LogReg(trainfile, testfile)
 
-        # Loop through test dataset
-        for i in range(len(self.test_inputs)):
-            # Get input-label data
-            inputs = self.test_inputs[i]
-            label = self.test_labels[i]
+    # Batch data
+    batch_start = 0
+    batch_end = 100
 
-            # Make prediction
-            prediction = self.predict(inputs)
+    # Train on batch
+    runBatch(batch_start, batch_end, max_train_itrs, learning_rate, boost, lr)
+    
 
-            print("\nInputs: " + str(inputs))
-            print("Predicted: " + str(prediction))
-            print("Actual: " + str(label))
-
-            # Check if prediction was correct
-            if prediction == label:
-                n_correct += 1
-
-            time.sleep(2)
-
-        print("\nTEST RESULTS:\n")
-        print("Number of test samples: " + str(len(self.test_inputs)))
-        print("Number of correct predictions: " + str(n_correct))
-        print("\nModel Accuracy: %.2f%%" % ((n_correct / n_samples) * 100.0))
-
-
-
-# Data files
-trainfile = 'datasets/spambase-train.csv'
-testfile = 'datasets/spambase-test.csv'
-
-lr = LogReg(trainfile, testfile)
-
-print("Length of inputs: " + str(len(lr.train_inputs)))
-
-idx = 15
-input = lr.train_inputs[idx]
-label = lr.train_labels[idx]
-
-print("\nTotal loss before training: " + str(lr.total_loss()))
-lr.train(max_itrs=1000)
-print("\nTotal loss before training: " + str(lr.total_loss()))
-
+main()
+    
 
