@@ -174,7 +174,7 @@ class LogReg:
         gradient = self.gradient(inputs, label, boost)
 
         # Update weight vector by stepping in the direction of neg. gradient
-        self.weights += learning_rate * gradient - boost
+        self.weights += -learning_rate * gradient
 
         # Update bias
         self.bias += label
@@ -302,6 +302,24 @@ class LogReg:
         self.trained = True
         return train_results
 
+
+    # Compute accuracy of model on given dataset
+    def accuracy(self, inputs, labels):
+        n_samples = len(inputs)
+        n_correct = 0
+
+        # Loop through inputs
+        for i in range(len(inputs)):
+            # Compute class prediction
+            output = self.predict(inputs[i])
+            label = labels[i]
+
+            if output == label:
+                n_correct += 1
+
+        return (n_correct / n_samples)
+
+
     # Load train/test data from file
     def loadDataFromFile(self, filename, train_data=True):
         # Check if training data or testing data
@@ -320,13 +338,20 @@ def runBatch(b_start, b_end, itrs, learn_rate, boost, logReg, train=True):
         input_data = logReg.train_inputs[b_start:b_end]
         input_labels = logReg.train_labels[b_start:b_end]
 
+        n_samples = len(input_data)
+        n_correct = 0
+        acc = 0.0
+
+        # Compute accuracy before training
+        print("\nModel accuracy before training: %.3f%%\n" % (logReg.accuracy(input_data, input_labels)*100.0))
+
         print("Training on batch [%d:%d] (size=%d)...\n" % (b_start, b_end, (b_start + b_end)))
-        print("Total loss before training: " + str(logReg.total_loss(boost, inputs=input_data, labels=input_labels)))
 
         # Train model on batch data
         logReg.train(itrs, learn_rate, boost, batch=[b_start, b_end])
 
-        print("Total loss after training: " + str(logReg.total_loss(boost, inputs=input_data, labels=input_labels)))
+        # Compute accuracy after training
+        print("\nModel accuracy after training: %.3f%%" % (logReg.accuracy(input_data, input_labels)*100.0))
 
     else:
         raise NotImplementedError
@@ -338,15 +363,15 @@ def main():
 
     # Hyperparameters
     max_train_itrs = 100000
-    learning_rate = 0.01
-    boost = 0.00001
+    learning_rate = 0.005
+    boost = 0.0001
 
     # Model
     lr = LogReg(trainfile, testfile)
 
     # Batch data
     batch_start = 0
-    batch_end = 100
+    batch_end = 50
 
     # Train on batch
     runBatch(batch_start, batch_end, max_train_itrs, learning_rate, boost, lr)
