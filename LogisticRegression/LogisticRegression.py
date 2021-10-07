@@ -1,6 +1,6 @@
 """
-3rd attempt at implementing logistic regression
-with cross entropy loss and gradient descent
+My implementation of logistic regression
+with binary cross entropy loss and gradient descent
 
 kward
 """
@@ -10,7 +10,6 @@ import time
 import re
 import warnings
 import numpy as np
-from functools import cache
 import matplotlib.pyplot as plt
 
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
@@ -50,10 +49,6 @@ class Parser:
 
 # Model Visualizer class
 class ModelVisualizer:
-
-    # Initialize
-    def __init__(self):
-        pass
 
     # Plot losses over iterations
     @staticmethod
@@ -423,7 +418,13 @@ def train_model(lr):
     
     return lr
 
+# Test model
+def test_model(lr):
+    baseline_acc = 0.936
 
+    print("\n\nModel validation accuracy: %.2f%%" % (lr.accuracy(lr.validation_inputs, lr.validation_labels) * 100.0))
+    print("Model test accuracy: %.2f%%" % (lr.accuracy(lr.test_inputs, lr.test_labels) * 100.0))
+    print("Model is %.2f%% below the baseline\n" % ((baseline_acc - lr.accuracy(lr.test_inputs, lr.test_labels)) * 100.0))
 
 def main():
    # Data files
@@ -433,16 +434,14 @@ def main():
     # Create LogisticRegression object
     lr = LogReg(trainfile, testfile)
 
+    # train_model(lr)
+
     # Load model from file
     lr.loadModel('model.obj')
 
-    print("Model weights: " + str(lr.weights) + "\nModel bias: " + str(lr.bias))
-
-    baseline_acc = 0.936
-
-    print("\n\nModel validation accuracy: %.2f%%" % (lr.accuracy(lr.validation_inputs, lr.validation_labels) * 100.0))
-    print("Model test accuracy: %.2f%%" % (lr.accuracy(lr.test_inputs, lr.test_labels) * 100.0))
-    print("Model is %.2f%% below the baseline\n" % ((baseline_acc - lr.accuracy(lr.test_inputs, lr.test_labels)) * 100.0))
+    
+    # Test trained model
+    test_model(lr)
     
 
 main()
