@@ -113,12 +113,13 @@ class LogReg:
         # Normalize input data
         train_mean = np.mean(self.train_inputs, axis=0)
         train_std = np.std(self.train_inputs, axis=0)
+
         self.train_inputs = (self.train_inputs - train_mean) / train_std
 
 
         # Model parameters
         self.weights = np.random.normal(0,1,self.train_inputs.shape[1])
-        self.bias = np.random.random()
+        self.bias = np.random.normal(0,1,1)[0]
 
         # Model data
         self.errors = []                # List for keeping track of training progress
