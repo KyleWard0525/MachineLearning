@@ -279,7 +279,7 @@ class LogReg:
             train_results['iterations'] += curr_itr
 
             if loss > 0:
-                self.errors.append(1.0 - self.accuracy())
+                self.errors.append(1.0 - self.accuracy(self.train_inputs, self.train_labels))
 
 
         
@@ -293,9 +293,9 @@ class LogReg:
         self.trained = True
         return train_results
 
-
-    def accuracy(self):
-        return np.sum((self.feed_forward(self.train_inputs)>0.5).astype(np.float64) == self.train_labels)  / self.train_labels.shape[0]
+    # Compute accuracy of model of dataset
+    def accuracy(self, inputs, labels):
+        return np.sum((self.feed_forward(inputs)>0.5).astype(np.float64) == labels)  / labels.shape[0]
 
 
     # Save model to file
@@ -303,7 +303,7 @@ class LogReg:
         file = open(filename, 'w')
 
         # Store model parameters in file
-        file.write("Weights: " + str(self.weights) + "\n\n")
+        file.write("Weights: " + str(self.weights).rstrip("\n") + "\n\n")
         file.write("Bias: " + str(self.bias))
 
         file.close()
@@ -314,6 +314,50 @@ class LogReg:
         else:
             print("\n\nERROR in LogReg.saveModel(): Failed to save model!")
 
+
+    # Load model from file
+    def loadModel(self, filename):
+
+        # Check if model exists
+        if os.path.exists(filename):
+            # Read lines from file
+            file = open(filename, 'r')
+            lines = file.readlines()
+            file.close()
+        else:
+            print("\nERROR in LogReg.loadModel(): Model file not found!")
+            return -1
+
+        weights = []
+
+        # Remove label from weights' line
+        lines[0] = lines[0].replace('Weights: [', '')
+        lines[0] = lines[0].replace(']', '')
+
+        # Remove label from bias line
+        lines[-1] = lines[-1].replace('Bias: ', '')
+
+        # Extract bias
+        bias = float(lines[-1])
+
+        # Loop through weight lines
+        for i in range(len(lines)-1):
+            # Clean line
+            line_weights = lines[i].strip().split(',')
+            
+            while '' in line_weights:
+                line_weights.remove('')
+            
+            # Extract weights from line and append to list
+            for weight in line_weights:
+                weights.append(float(weight))
+
+        
+        # Set model params
+        self.weights = weights
+        self.bias = bias  
+
+        print("\nMODEL LOADED SUCCESSFULLY!\n")      
 
 # Train/Test model on batch of data
 def runBatch(b_start, b_end, itrs, learn_rate, boost, logReg, train=True):
@@ -332,11 +376,10 @@ def runBatch(b_start, b_end, itrs, learn_rate, boost, logReg, train=True):
     else:
         raise NotImplementedError
 
-def main():
-    # Data files
-    trainfile = 'datasets/spambase-train.csv'
-    testfile = 'datasets/spambase-test.csv'
 
+# Train the model
+def train_model(lr):
+     
     # Hyperparameters
     max_train_itrs = 20000
     learning_rate = 0.001
@@ -345,8 +388,7 @@ def main():
     min_boost = 1e-9    # Minimum boost
     mod_rate = 2        # Number of batches to train before updating hyperparams
 
-    # Model
-    lr = LogReg(trainfile, testfile)
+    
 
     # Batch data
     n_batches = 26 # 100 inputs per batch
@@ -378,8 +420,29 @@ def main():
     # Save model to file
     lr.saveModel('model.obj')
     plt.savefig('model_progress.png')
+    
+    return lr
 
 
+
+def main():
+   # Data files
+    trainfile = 'datasets/spambase-train.csv'
+    testfile = 'datasets/spambase-test.csv'
+
+    # Create LogisticRegression object
+    lr = LogReg(trainfile, testfile)
+
+    # Load model from file
+    lr.loadModel('model.obj')
+
+    print("Model weights: " + str(lr.weights) + "\nModel bias: " + str(lr.bias))
+
+    baseline_acc = 0.936
+
+    print("\n\nModel validation accuracy: %.2f%%" % (lr.accuracy(lr.validation_inputs, lr.validation_labels) * 100.0))
+    print("Model test accuracy: %.2f%%" % (lr.accuracy(lr.test_inputs, lr.test_labels) * 100.0))
+    print("Model is %.2f%% below the baseline\n" % ((baseline_acc - lr.accuracy(lr.test_inputs, lr.test_labels)) * 100.0))
     
 
 main()
