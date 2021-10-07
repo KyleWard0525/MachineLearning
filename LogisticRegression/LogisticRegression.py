@@ -110,9 +110,15 @@ class LogReg:
             self.test_labels = test_set['labels']
         
 
+        # Normalize input data
+        train_mean = np.mean(self.train_inputs, axis=0)
+        train_std = np.std(self.train_inputs, axis=0)
+        self.train_inputs = (self.train_inputs - train_mean) / train_std
+
+
         # Model parameters
-        self.weights = np.random.rand(len(self.train_inputs[0]))
-        self.bias = 0.0
+        self.weights = np.random.normal(0,1,self.train_inputs.shape[1])
+        self.bias = np.random.random()
 
         # Model data
         self.errors = []                # List for keeping track of training progress
@@ -120,18 +126,16 @@ class LogReg:
         self.trained = False
 
     # Logistic (sigmoid) function
-    @cache
     def sigmoid(self, x):
         return 1 / (1 + np.exp(-x))
 
     # Derivative of logistic function
-    @cache
     def sigmoid_deriv(self, x):
         return self.sigmoid(x) * (1 - self.sigmoid(x))
 
     # Regularize weights
     def L2(self):
-        return np.linalg.norm(self.weights - self.bias)
+        return np.linalg.norm(self.weights)
 
     # Compute weighted sum of inputs
     def wsum(self, inputs):
@@ -144,25 +148,17 @@ class LogReg:
     # Compute the cross entropy loss of a single prediction
     # boost = lambda = regularization hyperparameter
     def cross_entropy(self, predicted, actual, boost):
-        return -(actual * np.log(predicted) + (1 - actual) * np.log(1 - predicted + (boost/2)*self.L2()))
+        if actual:
+            return -np.log(predicted + (boost/2)*self.L2())
+        else:
+            return -np.log(1 - predicted + (boost/2)*self.L2())
 
     """
     Compute the gradient of the cross entropy loss function
     """
     def gradient(self, inputs, label, boost):
 
-        # Derivative with respect to the model's prediction (output)
-        loss_wrt_prediction = label * (1 / self.feed_forward(inputs)) + (1 - label) * 1 / (1 - self.feed_forward(inputs) + (boost/2)*self.L2())
-
-        # Derivative of output with respect to it's weighted sum
-        pred_wrt_wsum = self.sigmoid_deriv(self.wsum(inputs))
-
-        # Derivative of weighted sum with respect to weights
-        wsum_wrt_weights = inputs
-
-        # Compute and return gradient
-        gradient = loss_wrt_prediction * pred_wrt_wsum * wsum_wrt_weights
-        return gradient
+        return np.dot(inputs, (self.feed_forward(inputs) - label)) + (boost/2)*self.L2()
 
     # Make a prediction (either 0 or 1)
     def predict(self, inputs):
@@ -174,10 +170,10 @@ class LogReg:
         gradient = self.gradient(inputs, label, boost)
 
         # Update weight vector by stepping in the direction of neg. gradient
-        self.weights += -learning_rate * gradient
+        self.weights -= learning_rate * gradient
 
         # Update bias
-        self.bias += label
+        self.bias -= learning_rate * (label - self.feed_forward(inputs))
 
 
     # Compute total loss over the entire dataset
@@ -217,7 +213,7 @@ class LogReg:
 
 
     # Train model on data
-    def train(self, max_itrs=100, learning_rate=0.001, boost=0.00001, stop=0.01, batch=''):
+    def train(self, max_itrs=100, learning_rate=0.0001, boost=0.00001, stop=0.01, batch=''):
         
         # Initialize training results
         train_results = {
@@ -227,9 +223,6 @@ class LogReg:
 
         # Inputs that failed and need to be re-trained after normal training
         failures = []
-
-        # Compute initial loss over entire training set
-        init_loss = self.total_loss(boost)
 
         # Start and stop points for training
         start = 0
@@ -303,22 +296,8 @@ class LogReg:
         return train_results
 
 
-    # Compute accuracy of model on given dataset
-    def accuracy(self, inputs, labels):
-        n_samples = len(inputs)
-        n_correct = 0
-
-        # Loop through inputs
-        for i in range(len(inputs)):
-            # Compute class prediction
-            output = self.predict(inputs[i])
-            label = labels[i]
-
-            if output == label:
-                n_correct += 1
-
-        return (n_correct / n_samples)
-
+    def accuracy(self):
+        return np.sum((self.feed_forward(self.train_inputs)>0.5).astype(np.float64) == self.train_labels)  / self.train_labels.shape[0]
 
     # Load train/test data from file
     def loadDataFromFile(self, filename, train_data=True):
@@ -333,17 +312,9 @@ class LogReg:
 
 # Train/Test model on batch of data
 def runBatch(b_start, b_end, itrs, learn_rate, boost, logReg, train=True):
-    if train:
-        # Get batch data from logreg obj
-        input_data = logReg.train_inputs[b_start:b_end]
-        input_labels = logReg.train_labels[b_start:b_end]
-
-        n_samples = len(input_data)
-        n_correct = 0
-        acc = 0.0
-
+    if train:   
         # Compute accuracy before training
-        print("\nModel accuracy before training: %.3f%%\n" % (logReg.accuracy(input_data, input_labels)*100.0))
+        print("\nModel accuracy before training: %.3f%%\n" % (logReg.accuracy()*100.0))
 
         print("Training on batch [%d:%d] (size=%d)...\n" % (b_start, b_end, (b_start + b_end)))
 
@@ -351,7 +322,7 @@ def runBatch(b_start, b_end, itrs, learn_rate, boost, logReg, train=True):
         logReg.train(itrs, learn_rate, boost, batch=[b_start, b_end])
 
         # Compute accuracy after training
-        print("\nModel accuracy after training: %.3f%%" % (logReg.accuracy(input_data, input_labels)*100.0))
+        print("\nModel accuracy after training: %.3f%%" % (logReg.accuracy()*100.0))
 
     else:
         raise NotImplementedError
@@ -362,16 +333,16 @@ def main():
     testfile = 'datasets/spambase-test.csv'
 
     # Hyperparameters
-    max_train_itrs = 100000
-    learning_rate = 0.005
-    boost = 0.0001
+    max_train_itrs = 10000
+    learning_rate = 0.0001
+    boost = 0.00001
 
     # Model
     lr = LogReg(trainfile, testfile)
 
     # Batch data
     batch_start = 0
-    batch_end = 50
+    batch_end = 100
 
     # Train on batch
     runBatch(batch_start, batch_end, max_train_itrs, learning_rate, boost, lr)
