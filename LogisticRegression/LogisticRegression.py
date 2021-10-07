@@ -9,7 +9,6 @@ import os
 import time
 import re
 import warnings
-import random
 import numpy as np
 from functools import cache
 import matplotlib.pyplot as plt
@@ -59,6 +58,9 @@ class ModelVisualizer:
     # Plot losses over iterations
     @staticmethod
     def plot_loss(losses, xlabel='', ylabel='', title=''):
+        plt.close()
+        plt.figure(figsize=(7,8))
+
         # Create a linear space to plot
         x_axis = np.linspace(0,len(losses), len(losses))
 
@@ -111,32 +113,61 @@ class LogReg:
         
 
         # Normalize input data
-        train_mean = np.mean(self.train_inputs, axis=0)
-        train_std = np.std(self.train_inputs, axis=0)
+        self.train_inputs = self.normalize(self.train_inputs)
 
-        self.train_inputs = (self.train_inputs - train_mean) / train_std
+        # Read header data
+        self.headers = headers[0].split(',')[0:-1]
 
+        # Prepare / preprocess data
+        self.n_train_samples = 2600
+        self.prepare_data()
+
+        # Inputs that failed training
+        self.failures = []
 
         # Model parameters
+        np.random.seed()
         self.weights = np.random.normal(0,1,self.train_inputs.shape[1])
         self.bias = np.random.normal(0,1,1)[0]
 
         # Model data
-        self.errors = []                # List for keeping track of training progress
+        self.errors = []            # List for keeping track of training progress
         self.curr_loss = 0.0            # Current loss
         self.trained = False
 
+    # Preprocess normalized input data
+    def prepare_data(self):
+
+        # Create an array of values from 0-len(train_inputs_norm)
+        indices = np.arange(self.train_inputs.shape[0])
+
+        # Randomly shuffle array of indices
+        indices = np.random.permutation(indices)
+
+        # Create validation sets from last 2600 randomly-aranged, normalized inputs
+        self.validation_inputs = self.train_inputs[indices[self.n_train_samples:]]
+        self.validation_labels = self.train_labels[indices[self.n_train_samples:]]
+
+        # Set training data as the rest of the normalized inputs
+        self.train_inputs = self.train_inputs[indices[:self.n_train_samples]]
+        self.train_labels = self.train_labels[indices[:self.n_train_samples]]
+
+
     # Logistic (sigmoid) function
     def sigmoid(self, x):
+        # New array with the specified precision
         return 1 / (1 + np.exp(-x))
-
-    # Derivative of logistic function
-    def sigmoid_deriv(self, x):
-        return self.sigmoid(x) * (1 - self.sigmoid(x))
 
     # Regularize weights
     def L2(self):
         return np.linalg.norm(self.weights)
+
+    # Normalize data
+    def normalize(self, data):
+        mean = np.mean(data)
+        std = np.std(data)
+
+        return (data - mean) / std
 
     # Compute weighted sum of inputs
     def wsum(self, inputs):
@@ -149,21 +180,21 @@ class LogReg:
     # Compute the cross entropy loss of a single prediction
     # boost = lambda = regularization hyperparameter
     def cross_entropy(self, predicted, actual, boost):
+        
         if actual:
-            return -np.log(predicted + (boost/2)*self.L2())
+            return -np.mean(np.log(predicted))
         else:
-            return -np.log(1 - predicted + (boost/2)*self.L2())
+            return -np.mean(np.log((1.0 - predicted) + (boost/2.0)*self.L2()))
 
     """
     Compute the gradient of the cross entropy loss function
     """
     def gradient(self, inputs, label, boost):
-
         return np.dot(inputs, (self.feed_forward(inputs) - label)) + (boost/2)*self.L2()
 
     # Make a prediction (either 0 or 1)
     def predict(self, inputs):
-        return round(self.feed_forward(inputs))
+        return np.where(self.feed_forward(inputs) > 0.5, 1, 0)
 
     # Perform a weight update
     def update(self, inputs, label, learning_rate, boost):
@@ -174,43 +205,7 @@ class LogReg:
         self.weights -= learning_rate * gradient
 
         # Update bias
-        self.bias -= learning_rate * (label - self.feed_forward(inputs))
-
-
-    # Compute total loss over the entire dataset
-    def total_loss(self, boost, inputs='', labels=''):
-        loss = 0.0
-
-        # Compute total loss of existing training set
-        if len(inputs) <= 0 and len(labels) <= 0:
-            # Loop through dataset
-            for i in range(len(self.train_inputs)):
-                # Get input vector and class label
-                input = self.train_inputs[i]
-                label = self.train_labels[i]
-
-                # Compute output
-                output = self.feed_forward(input)
-                
-                # Increment loss 
-                loss += self.cross_entropy(output, label, boost)
-
-        # Compute total loss of given data    
-        else:
-            # Loop through data
-            for i in range(len(inputs)):
-                # Get input vector and class label
-                input = inputs[i]
-                label = labels[i]
-
-                # Compute output
-                output = self.feed_forward(input)
-                
-                # Increment loss 
-                loss += self.cross_entropy(output, label, boost)
-
-            
-        return loss
+        self.bias -=  learning_rate * (self.feed_forward(inputs) - label)
 
 
     # Train model on data
@@ -222,17 +217,14 @@ class LogReg:
             'iterations': 0
         }
 
-        # Inputs that failed and need to be re-trained after normal training
-        failures = []
-
         # Start and stop points for training
         start = 0
         end = len(self.train_inputs)
 
         # Check if a batch has been specified
         if len(batch) == 2:
-            start = batch[0]
-            end = batch[1]
+            start = int(batch[0])
+            end = int(batch[1])
 
         # Loop through dataset
         for i in range(start, end):
@@ -252,7 +244,6 @@ class LogReg:
             input_losses.append(loss)
 
             # Add total loss at iteration to training results
-            #train_results['loss'].append(self.total_loss(train_inputs, train_labels))
 
             # Train model on this input until it reaches acceptable margins for loss
             # or max iterations reached
@@ -272,27 +263,33 @@ class LogReg:
                 input_losses.append(loss)
 
                 # Add total loss at iteration to training results
-                #train_results['loss'].append(self.total_loss())
 
 
             # Check if input failed training
-            if loss > stop:
-                failures.append(i)
+            if loss < 0:
+                self.failures.append(start + i)
+
+                
 
             # Plot losses, skip if curr_itr <= 1
             print("Loss(input=" + str(i) + "): " + str(loss) + "\titrs = " + str(curr_itr))
-            plt_title = 'Training progress on input ' + str(i)
+            
 
-            # if curr_itr > 1:
-            #     ModelVisualizer.plot_loss(input_losses, xlabel='Training iteration', ylabel='Loss (Error)', title=plt_title)
-            #     plt.pause(1)
-            #     plt.close()
-
-            # Increment total training iterations
+            # Update training results
             train_results['iterations'] += curr_itr
 
+            if loss > 0:
+                self.errors.append(1.0 - self.accuracy())
+
+
         
-        print("\nMODEL TRAINED!\n")
+        # Plot learning progress
+        plt_title = 'Training progress' + "\nMax Iterations = " + str(max_itrs) + "\nLearning Rate = " + str(learning_rate) + "  Boost = " + str(boost) + "\nCurrent Accuracy = " + str(self.accuracy() * 100.0) + "%"
+        ModelVisualizer.plot_loss(self.errors, xlabel='Training iteration', ylabel='Loss (Error)', title=plt_title)
+        plt.pause(2)
+
+        
+        print("\nMODEL TRAINED  (with %d failures)!\n" % (len(self.failures)))
         self.trained = True
         return train_results
 
@@ -300,15 +297,22 @@ class LogReg:
     def accuracy(self):
         return np.sum((self.feed_forward(self.train_inputs)>0.5).astype(np.float64) == self.train_labels)  / self.train_labels.shape[0]
 
-    # Load train/test data from file
-    def loadDataFromFile(self, filename, train_data=True):
-        # Check if training data or testing data
-        if train_data:
-            self.train_inputs, self.train_labels = Parser.read_data(filename)
-            print("\nNew training data loaded!\n")
+
+    # Save model to file
+    def saveModel(self, filename):
+        file = open(filename, 'w')
+
+        # Store model parameters in file
+        file.write("Weights: " + str(self.weights) + "\n\n")
+        file.write("Bias: " + str(self.bias))
+
+        file.close()
+
+        # Check if save was successful
+        if os.path.exists(filename):
+            print("\n\nMODEL SAVED!\nModel file = " + str(filename))
         else:
-            self.test_inputs, self.test_labels = Parser.read_data(filename)
-            print("\nNew test data loaded!\n")
+            print("\n\nERROR in LogReg.saveModel(): Failed to save model!")
 
 
 # Train/Test model on batch of data
@@ -334,19 +338,48 @@ def main():
     testfile = 'datasets/spambase-test.csv'
 
     # Hyperparameters
-    max_train_itrs = 10000
-    learning_rate = 0.0001
-    boost = 0.00001
+    max_train_itrs = 20000
+    learning_rate = 0.001
+    boost = 0.000001
+    min_lr = 1e-6       # Minimum learning rate
+    min_boost = 1e-9    # Minimum boost
+    mod_rate = 2        # Number of batches to train before updating hyperparams
 
     # Model
     lr = LogReg(trainfile, testfile)
 
     # Batch data
-    batch_start = 0
-    batch_end = 100
+    n_batches = 26 # 100 inputs per batch
 
-    # Train on batch
-    runBatch(batch_start, batch_end, max_train_itrs, learning_rate, boost, lr)
+    for i in range(n_batches):
+        start = (len(lr.train_inputs) / n_batches) * i              # Start index of batch
+        end = ((len(lr.train_inputs) / n_batches) * (i + 1)) - 1    # End index of batch
+
+        # Adjust boost and learning rate every other batch as model trains (to avoid overfitting)
+        if i % mod_rate == 0 and i > 0:
+            if learning_rate > min_lr:
+                # Last few updates
+                if learning_rate <= min_lr*10:
+                    max_train_itrs *= 0.7   # Update max training iterations
+                
+                mod_rate *= 2           # Change update rate
+                learning_rate /= i  # update learning rate
+
+            if boost > min_boost:
+                boost /= i
+
+        # Train model on batch
+        runBatch(start, end, max_train_itrs, learning_rate, boost, lr)
+    
+
+    plt_title = 'Training progress' + "\nMax Iterations = " + str(max_train_itrs) + "\nLearning Rate = " + str(learning_rate) + "  Boost = " + str(boost) + "\nCurrent Accuracy = " + str(lr.accuracy() * 100.0) + "%"
+    ModelVisualizer.plot_loss(lr.errors, xlabel='Training iteration', ylabel='Loss (Error)', title=plt_title)
+
+    # Save model to file
+    lr.saveModel('model.obj')
+    plt.savefig('model_progress.png')
+
+
     
 
 main()
