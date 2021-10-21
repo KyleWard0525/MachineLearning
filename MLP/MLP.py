@@ -89,9 +89,46 @@ class MLP:
 
     # Compute loss with weight regularization
     def cost(self, prediction, label):
-        return self.loss_func(prediction, label) + ()
+        return self.loss_func(prediction, label) + (self.regularizer * self.math.L2(self.hidden_weights) + (self.regularizer * self.math.L2(self.output_weights)))
 
+    # Compute gradients
+    def gradient(self, predicted, label):
+        """""""""""""""""""""""""""""""""""
+                
+            OUTPUT LAYER GRADIENTS
 
+        """""""""""""""""""""""""""""""""""
+        # Gradient of output node(s)
+        output_grad = -self.loss_deriv(predicted, label)
+        
+        # Compute gradients of output weights
+        output_weight_grads = []
+
+        # Loop through output weights
+        for o_weight in self.output_weights:
+            output_weight_grads.append(output_grad * o_weight)
+
+        print("\nGradient w.r.t Output Node: " + str(output_grad))
+        print("Gradients w.r.t Output Weights: " + str(output_weight_grads))
+
+        """""""""""""""""""""""""""""""""""
+                
+            HIDDEN LAYER GRADIENTS
+
+        """""""""""""""""""""""""""""""""""
+        hidden_node_grads = []
+
+        # Loop through output gradients
+        for o_weight_grad in output_weight_grads:
+            # Compute gradient of each hidden node
+            hidden_node_grads.append(self.activate_deriv(output_grad * o_weight_grad))
+
+        print("\nGradients of hidden nodes: " + str(hidden_node_grads))
+
+        # Input-hidden weight gradients
+        input_weight_grads = []
+
+        
 
     # Print information about MLP
     def print_self(self):
