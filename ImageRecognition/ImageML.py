@@ -116,7 +116,7 @@ class ImageML:
         freq = float(n_occur / len(self.colors))
         return freq
 
-im = ImageMatrix("images/mona-lisa.jpg")
+im = ImageML("images/mona-lisa.jpg")
 im.printImgInfo()
 c_freq = im.getColorFreq(-1)
 print("Frequency: " + str(c_freq))
