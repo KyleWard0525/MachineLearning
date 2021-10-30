@@ -125,8 +125,36 @@ class MLP:
 
         print("\nGradients of hidden nodes: " + str(hidden_node_grads))
 
+        """""""""""""""""""""""""""""""""""
+                
+            INPUT LAYER GRADIENTS
+
+        """""""""""""""""""""""""""""""""""
+
         # Input-hidden weight gradients
         input_weight_grads = []
+        inputs = self.train_data['inputs'][0]
+
+        # Loop through all inputs
+        for i in range(len(inputs)):
+            i_val = inputs[i]
+
+            for j in range(self.n_hidden):
+                weight = self.hidden_weights[j][i]
+                bias = self.biases[j]
+                input_weight_grads.append(i_val * weight + bias)
+
+        print("\nGradients of inputs wrt to their weights: " + str(input_weight_grads))
+        
+        hidden_weight_grads = []
+
+        # Hidden weight gradients
+        for i in range(len(input_weight_grads)):
+            if i < 3:
+                
+
+        print("\nHidden Weight gradients: " + str(hidden_weight_grads))
+
 
         
 
