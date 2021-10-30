@@ -26,10 +26,12 @@ class MLPTest:
         mlp.print_self()
         prediction = mlp.feed_forward()
         label = mlp.train_data['labels'][0]
-        loss = mlp.loss_func(prediction, label)
+        cost = mlp.cost(prediction, label)
         print("\n\nModel's initial prediction on first sample:")
         print("Prediction: " + str(prediction) + "\tLabel: " + str(label))
-        print("Loss: " + str(loss))
+        print("Cost: " + str(cost) + "\n")
+
+        mlp.gradient(prediction, label)
 
 
 
