@@ -44,7 +44,7 @@ def gradient_descent(x, learning_rate, max_itrs):
     print("Maximum training iterations: " + str(max_itrs) + "\n")
     
     curr_itr = 0                # Current training iteration
-    step_size = 0          # Change between iterations
+    step_size = 0               # Change between iterations
 
     if learning_rate >= 1:
         learning_rate = 1 / learning_rate
