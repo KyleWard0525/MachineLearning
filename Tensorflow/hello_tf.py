@@ -3,9 +3,16 @@
 """
 import tensorflow as tf
 import numpy as np
+import os, sys
+
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+from mlutils import MathML
 
 # Check tf version
 print("\nTensorflow version: " + str(tf.__version__))
+
+# Create math object
+math = MathML()
 
 # Load MNIST dataset
 mnist = tf.keras.datasets.mnist
@@ -16,6 +23,12 @@ mnist = tf.keras.datasets.mnist
 print("\nTraining size: " + str(len(train_inputs)))
 print("Test size: " + str(len(test_labels)))
 print("Number of inputs: " + str(len(train_inputs[0])))
+
+# Normalize train and test inputs
+train_inputs = math.normalize(train_inputs)
+test_inputs = math.normalize(test_inputs)
+
+print("\nNormalized input 0: " + str(train_inputs[0]) + "\n\n")
 
 # Create model (neural network)
 model = tf.keras.models.Sequential([
@@ -54,7 +67,7 @@ model.compile(optimizer="adam", loss="sparse_categorical_crossentropy", metrics=
 model.fit(x = train_inputs,                 #   Training inputs
           y = train_labels,                 #   Training labels
           batch_size = 1000,                #   Number of inputs to train on at once
-          epochs = 200,                     #   Number of training iterations
+          epochs = 50,                      #   Number of training iterations
           validation_split = 0.3,           #   Percentage of train data to be used by model as validation data at the end of each epoch
           verbose = 2,                      #   2 = print one line per epoch
           shuffle = True                    #   Shuffle training data at the beginning of each epoch
