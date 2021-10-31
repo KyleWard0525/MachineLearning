@@ -4,6 +4,7 @@
 import tensorflow as tf
 import numpy as np
 import os, sys
+import matplotlib.pyplot as plot
 
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 from mlutils import MathML
@@ -24,10 +25,23 @@ print("\nTraining size: " + str(len(train_inputs)))
 print("Test size: " + str(len(test_labels)))
 print("Number of inputs: " + str(len(train_inputs[0])))
 
+x = np.linspace(0, 255, [28,28])
+
+for i in range(10):
+    plot.plot(x, train_inputs[i])
+    plot.show(block=False)
+    plot.pause(1)
+    plot.clf()
+
+
+
+
+breakpoint()
+
+
 # Normalize train and test inputs
 train_inputs = math.normalize(train_inputs)
 test_inputs = math.normalize(test_inputs)
-
 
 # Create model (neural network)
 model = tf.keras.models.Sequential([
