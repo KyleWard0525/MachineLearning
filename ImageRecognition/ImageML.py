@@ -110,13 +110,10 @@ class ImageML:
     # Compute frequency of a color wrt all pixels
     def getColorFreq(self, color_idx):
         color = self.colors[color_idx]
-        print(color)
         n_occur = color[0]
         
         freq = float(n_occur / len(self.colors))
         return freq
 
-im = ImageML("images/mona-lisa.jpg")
+im = ImageML("../images/mona-lisa.jpg")
 im.printImgInfo()
-c_freq = im.getColorFreq(-1)
-print("Frequency: " + str(c_freq))
