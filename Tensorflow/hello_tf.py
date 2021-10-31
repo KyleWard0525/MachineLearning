@@ -28,7 +28,6 @@ print("Number of inputs: " + str(len(train_inputs[0])))
 train_inputs = math.normalize(train_inputs)
 test_inputs = math.normalize(test_inputs)
 
-print("\nNormalized input 0: " + str(train_inputs[0]) + "\n\n")
 
 # Create model (neural network)
 model = tf.keras.models.Sequential([
@@ -42,8 +41,8 @@ model = tf.keras.models.Sequential([
     # First hidden layer 
     # 
     # fully-connected (dense), computes y = α(dot(inputs,weights) + bias)
-    # 196 fully-connected nodes. ReLU activation function. Adds bias to each node.
-    tf.keras.layers.Dense(units=196, activation='relu', use_bias=True), 
+    # 196 fully-connected nodes. ReLU activation function. L2 Weight Regularization. Adds bias to each node.
+    tf.keras.layers.Dense(units=196, activation='relu', kernel_regularizer=tf.keras.regularizers.L2(0.0001), use_bias=True), 
 
     # Second hidden layer
     # 
