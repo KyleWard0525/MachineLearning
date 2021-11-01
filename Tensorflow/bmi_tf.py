@@ -10,6 +10,7 @@ import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plot
 from sklearn.model_selection import train_test_split
+from mlxtend.plotting import plot_decision_regions
 
 # Add parent directory for external modules
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
@@ -56,10 +57,6 @@ def preprocess(dataset, test_amt, normalize_inputs=True):
     return proc_data
 
 
-
-
-
-
 # Create generator and generate bmi dataset
 datgen = DataGen()
 n_samples = 100000
@@ -88,7 +85,7 @@ verbosity = 2                   #   2 = print line per epoch
 
 
 #   Preprocess data to use in the model
-model_data = preprocess(dataset, test_amt, normalize_inputs=True)
+model_data = preprocess(dataset, test_amt, normalize_inputs=False)
 
 # Build and train model
 def build_model():
@@ -105,13 +102,13 @@ def build_model():
     model = tf.keras.models.Sequential([
 
         #   Input layer
-        tf.keras.layers.InputLayer(input_shape=(n_inputs,)),
+        tf.keras.layers.InputLayer(input_shape=(n_inputs,), name="input"),
 
         #   Hidden layer 1
-        tf.keras.layers.Dense(units=n_hidden, kernel_regularizer=tf.keras.regularizers.L2(weight_reg), use_bias=True),
+        tf.keras.layers.Dense(units=n_hidden, kernel_regularizer=tf.keras.regularizers.L2(weight_reg), use_bias=True, name="hidden"),
 
         #   Output layer
-        tf.keras.layers.Dense(n_outputs, activation=output_activation)
+        tf.keras.layers.Dense(n_outputs, activation=output_activation, name="output")
     ])
 
     # Configure model training functions such as loss, optimizer algorighm, and accuracy metrics
@@ -139,7 +136,7 @@ def build_model():
         print("\nModel failed to train!")
 
 
-# Load model from file
+#   Load model from file
 def load_model():
     if os.path.exists('models/bmi_model'):
         bmi = tf.keras.models.load_model('models/bmi_model')
@@ -149,35 +146,111 @@ def load_model():
         print("\n\nERROR in load_model(): Model file not found")
 
 
-# Classify user's BMI category as predicted by the model
+#   Classify user's BMI category as predicted by the model
 def classify(pred):
-    # BMI < 18.5
-    if pred > 0.0 and pred <= 0.25:
-        return 'underweight'
+    if pred == 0.0:
+        return 'not overweight'
+    else:
+        return 'overweight'
+
+
+#   Test model on a given weight and height
+def test_bmi(model, height, weight):
+    # Convert to metric units
+    metric_weight = weight * datgen.conversions['lb2kg']
+    metric_height = height * datgen.conversions['in2cm']
+
+    # Compute user's bmi
+    bmi = round((metric_weight / metric_height / metric_height) * 10000.00, 2)
+
+    # Create input for model
+    input = np.array([weight, height]).reshape(-1,2)
+
+    # Make prediction
+    prediction = float(model.predict(input)[0])
+
+    # Classify user based on model's prediction
+    classification = classify(prediction)
+
+    print("\n\nWeight of " + str(weight) + " lbs.\nHeight of " + str(height) + " inches.\n" +
+        "BMI of " + str(bmi) + "\nThe model has classified you as: '" + str(classification) + "'\n\n")
+
+
+# Plot model results wrt all training samples
+def plot_model(model):
+    # Plot figure
+    bmi_plot = plot.figure().add_subplot(111)
+
+    # Plot points
+    points = {
+        'pos': [],
+        'neg': [],
+
+    }
+
     
-    # 18.5 < BMI < 24.9
-    if pred > 0.25 and pred <= 0.5:
-        return 'normal'
+    # Loop through datasets (train and test) in model_data
+    for dataset in model_data:
+        # Extract inputs and labels from data
+        inputs = model_data[dataset]['inputs']
+        labels = model_data[dataset]['labels']
 
-    # 25 < BMI < 29.9
-    if pred > 0.5:
-        return 'over'
+        # Loop through each input-label pair
+        for i in range(len(labels)):
+            # Check if overweight or not
+            if labels[i] == 1:
+                # Add overweight sample to positive points
+                points['pos'].append(inputs[i])
+            else:
+                # Add non-overweight sample to negative points
+                points['neg'].append(inputs[i])
+
+    print("\nPositive samples: " + str(len(points['pos'])))
+    print("Negative samples: " + str(len(points['neg'])))
+
+    np_pos = np.array(points['pos'])
+    np_neg = np.array(points['neg'])
+
+    # Plot positive points (Patients that are overweight)
+    bmi_plot.scatter(np_pos[:,0], np_pos[:,1], c="red", marker="+", label="Overweight")
+            
+    # Plot negative points (Patients that aren't overweight)
+    bmi_plot.scatter(np_neg[:,0], np_neg[:,1], c="blue", marker="_", label="Not Overweight")
+
+    # Configure plot
+    bmi_plot.set_title("BMI Plot")
+    bmi_plot.set_xlabel("Weight(lbs)")
+    bmi_plot.set_ylabel("Height(in)")
+    bmi_plot.legend(loc='best', bbox_to_anchor=(1.05,1.15))
+
+    # Display plot
+    #plot.show()
 
 
-# Build and train model
-#build_model()
 
 # Load model and predict bmi
 model = load_model()
 model._name = "DALE"
 
-print(model._name)
+
+print("\n\n" + str(model.summary()) + "\n\n")
 
 
-weight = 199
-height = 73
-input = np.array([weight, height]).reshape(-1,2)
-print("\nInput: " + str(input[0]) + "\n")
-prediction = model.predict(input)
+print("\n\nPLOTTING MODEL...\n\n")
 
-print(float(prediction[0]))
+test_inputs = np.array(model_data['test']['inputs'])
+test_labels = np.array(model_data['test']['labels'])
+
+model.evaluate(test_inputs, test_labels)
+plot_model(model)
+plot_decision_regions(test_inputs, test_labels, clf=model, legend=2)
+plot.show()
+
+
+
+# Test case
+# weight = 185
+# height = 72
+# test_bmi(model, height, weight)
+# model_weights = model.get_layer(index=0).get_weights()
+# model_biases = model.get_layer(index=1).get_weights()
