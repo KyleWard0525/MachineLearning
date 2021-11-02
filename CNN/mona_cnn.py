@@ -21,7 +21,7 @@ def crop_head(imgr):
     return head_arr
 
 # Image processing class
-imgr = Imager("../images/minhattan.png")
+imgr = Imager("../images/mona-lisa.png")
 imgr.printImgInfo()
 
 # Working on just the cropped part (for now)
@@ -32,7 +32,10 @@ filter_shape = [3,3,3]
 conv_filter = np.random.randint(low=-1, high=1, size=filter_shape)
 print("Convolutional filter = :" + str(conv_filter) + "\n")
 
-conv_matrix = ndimage.convolve(imgr.pixels, conv_filter)
+conv_matrix = imgr.pixels
+
+for i in range(3):
+    conv_matrix = ndimage.convolve(conv_matrix, conv_filter)
 
 conv_img = Image.fromarray(conv_matrix)
-conv_img.save("data/minhattan_meg.png")
+conv_img.show()
