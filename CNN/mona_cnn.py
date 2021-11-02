@@ -42,7 +42,7 @@ sharp_matrix = ndimage.maximum_filter(conv_matrix, size=2)
 smooth_matrix = ndimage.median_filter(conv_matrix, size=2)
 
 # Convert matrices to images
-cropped_img = Image.fromarray(imgr.pixels)
+cropped_img = Image.fromarray(-imgr.pixels)
 conv_img = Image.fromarray(conv_matrix)
 sharp_img = Image.fromarray(sharp_matrix)
 smooth_img = Image.fromarray(conv_matrix - smooth_matrix)
