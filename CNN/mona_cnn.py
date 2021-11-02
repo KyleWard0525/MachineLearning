@@ -5,7 +5,7 @@ use one to recognize patterns in images
 kward60
 """
 
-import os, sys, time
+import os, sys, time, math
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
@@ -21,7 +21,7 @@ def crop_head(imgr):
     return head_arr
 
 # Image processing class
-imgr = Imager("../images/mona-lisa.png")
+imgr = Imager("../images/face1.jfif")
 imgr.printImgInfo()
 
 # Working on just the cropped part (for now)
@@ -32,10 +32,29 @@ filter_shape = [3,3,3]
 conv_filter = np.random.randint(low=-1, high=1, size=filter_shape)
 print("Convolutional filter = :" + str(conv_filter) + "\n")
 
-conv_matrix = imgr.pixels
 
-for i in range(3):
-    conv_matrix = ndimage.convolve(conv_matrix, conv_filter)
+conv_matrix = ndimage.convolve(imgr.pixels, conv_filter)
 
+# Extract the sharp parts of the image such as edges with max pooling
+sharp_matrix = ndimage.maximum_filter(conv_matrix, size=2)
+
+# Extract the soft/smooth parts of the image using average pooling
+smooth_matrix = ndimage.median_filter(conv_matrix, size=2)
+
+# Convert matrices to images
+cropped_img = Image.fromarray(imgr.pixels)
 conv_img = Image.fromarray(conv_matrix)
+sharp_img = Image.fromarray(sharp_matrix)
+smooth_img = Image.fromarray(conv_matrix - smooth_matrix)
+shooth_img = Image.fromarray(abs(sharp_matrix % smooth_matrix))
+
+# Show images
+cropped_img.show()
+time.sleep(1)
 conv_img.show()
+time.sleep(1)
+sharp_img.show()
+time.sleep(1)
+smooth_img.show()
+time.sleep(1)
+shooth_img.show()
