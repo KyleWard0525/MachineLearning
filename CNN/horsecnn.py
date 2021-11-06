@@ -30,7 +30,8 @@ class HorseCNN:
         self.imgr = Imager(self.img_path + str(0) + ".png")                         #   Image processing helper
 
         # Load images and masks
-        images, masks = self.loadDatasets()
+        self.images, self.masks = self.loadDatasets()
+
         
         # Initialize model hyperparameters
         self.n_hidden = 128                                                         #   Number of hidden nodes
@@ -48,6 +49,46 @@ class HorseCNN:
         self.max_pool_shape = [2,2]                                                 #   Shape of matrix for Max Pooling Layer (For extracting sharp parts of the image?)
         self.avg_pool_shape = [4,4]                                                 #   Shape of matrix for Average Pooling Layer (For extracting smooth parts of the image?)
 
+        input_mat = self.images[0]['pixels']
+        print("\nInput matrix: " + str(input_mat.shape))
+
+        # Create model
+        self.model = tf.keras.models.Sequential([
+            # Convolutional layer to extract features from image
+            tf.keras.layers.Conv2D(self.n_filters, self.filt_shape[0], activation=self.hidden_activation, input_shape=input_mat.shape[0:]),
+
+            # Apply a maximum pooling layer to extract sharp features
+            tf.keras.layers.MaxPooling2D(self.max_pool_shape[0], self.max_pool_shape[1]),
+
+            # Convolutional layer to extract features from image
+            tf.keras.layers.Conv2D(self.n_filters, self.filt_shape[0], activation=self.hidden_activation, input_shape=input_mat.shape[1:]),
+
+            # Apply average pooling to extract smooth features
+            tf.keras.layers.AveragePooling2D(self.avg_pool_shape),
+
+            # Flatten inputs to dense layer
+            tf.keras.layers.Flatten(),
+
+            # Pass feature map to dense layer for learning
+            tf.keras.layers.Dense(units=self.n_hidden, activation=self.hidden_activation, use_bias=True),
+
+            # Pass feature map to dense layer for learning
+            tf.keras.layers.Dense(units=self.n_hidden, activation=self.hidden_activation, use_bias=True),
+
+            # Output layer
+            tf.keras.layers.Dense(units=self.n_outputs, activation=self.output_activation)
+        ])
+
+        print(self.model.summary())
+
+        output = self.model.predict(tf.expand_dims(self.images[0]['pixels'], axis=0))[0]
+        rgb = self.outputToRGB(output)
+
+        rgb = np.reshape(rgb, input_mat.shape[0:])
+        print(rgb.shape)
+
+        out_img = Image.fromarray(rgb)
+        out_img.save("data/MilosProgress/a.png")
 
     #   Load image and mask datasets
     def loadDatasets(self):
@@ -68,7 +109,24 @@ class HorseCNN:
 
 
         return [datasets['images'], datasets['masks']]
-        
+
+
+    #   Convert prediction to rgb matrix
+    def outputToRGB(self, output_matrix):
+        rgb_matrix = []
+
+        # Loop through output
+        for prediction in output_matrix:
+            # Check if pixel prediction is white (>=0.5) or black (<0.5)
+            if prediction >= 0.5:
+                # Add white pixel
+                rgb_matrix.append(np.array([255, 255, 255], dtype=np.uint8))
+            else:
+                # Add black pixel
+                rgb_matrix.append(np.array([0, 0, 0], dtype=np.uint8))
+
+        return rgb_matrix
+
 
     #   Convolve the current image
     def convolve(self, filter):
